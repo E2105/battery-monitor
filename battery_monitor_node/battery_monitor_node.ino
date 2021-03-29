@@ -61,10 +61,10 @@ void setup() {
 void loop() {
 
   // Reading inputs
-  int cell1 = analogRead(A3);
-  int cell2 = analogRead(A2);
-  int cell3 = analogRead(A1);
-  int cell4 = analogRead(A0);
+  int cell1 = analogRead(cellPins[0]);
+  int cell2 = analogRead(cellPins[1]);
+  int cell3 = analogRead(cellPins[2]);
+  int cell4 = analogRead(cellPins[3]);
 
   // Calculating original cell voltage by multiplying with the reverse of the physical voltage divider ratio.
   // 4.75 V is used over 5.0 V because it is more accurate to the physical hardware.
@@ -79,6 +79,7 @@ void loop() {
   //    The measurement uncertainty is exploited in a way that a fully charged battery
   //    will show a higher voltage, and an undercharged one will show less to lessen
   //    the chance to kill the battery.
+  
   if (batteryVoltage <= 17.5 && batteryVoltage > 16.15){
     lightUp(10);
   } else if (batteryVoltage <= 16.15 && batteryVoltage > 15.8){
@@ -123,6 +124,9 @@ void loop() {
   display.display();
   delay(10);
   display.clearDisplay();
+
+  // Writing to the topic [Add more info]
+  battery.voltage = batteryVoltage;
   
   // Publish ROS Topic
   battery.publish(&battery_msg);
