@@ -1,85 +1,100 @@
-// ROS implementation of BMS code
 
-// ROS dependancies
-#include <ros.h>
-#include <ros/time.h>
-#include <sensor_msgs/BatteryState.h>
-
-// OLED Screen dependancies
+// OLED
+/*
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+*/
+
+#include <ros.h>
+#include <sensor_msgs/BatteryState.h>
+
+/*
+#define OLED_RESET 4
+Adafruit_SSD1306 display(OLED_RESET);
+*/
+
+#define CELLS         4
+#define BIT_TO_VOLT   4.8/1023.0
+
+/*
+// Resistor values
+float r1[] = {0, 9700, 22100, 22000};   // Ohms
+float r2[] = {9900, 9800, 9900, 7400};  // Ohms
+*/
+
+double ratios[] = {1.0, (9.7+9.8)/9.8, (22.1+9.9)/9.9, (22.0+7.4)/7.4}; 
+
+//int lightPins[] = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
 
 ros::NodeHandle nh;
 sensor_msgs::BatteryState battery_msg;
-ros::Publisher battery("/battery_health", &battery_msg);
-
-// Screen parameters
-#define OLED_RESET 4
-Adafruit_SSD1306 display(OLED_RESET);
-
-// Resistor values
-float r1[] = {0, 9700, 22100, 22000};   // Ohms
-float r2[] = {9900, 9800, 9900, 7400};     // Ohms
-
-// Pins
-int lightPins[] = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
-int cellPins[] = {A3, A2, A1, A0};
-
+ros::Publisher batteryState("battery", &battery_msg);
 
 void setup() {
- Serial.begin(9600);
- 
- // ROS initiation
- nh.initNode();
- nh.advertise(battery);
 
- // Initiating pins
- for (int inputs=0; inputs<sizeof(cellPins)+1; inputs++){
-  pinMode(cellPins[inputs], INPUT);
- }
- 
- for (int outputs=0; outputs<sizeof(lightPins)+1; outputs++){
+  //Serial.begin(9600);
+
+  // ROS initiation
+  nh.initNode();
+  nh.advertise(batteryState);
+
+  // Populate battery parameters.
+  battery_msg.power_supply_status = 2;     // discharging
+  battery_msg.power_supply_health = 0;     // unknown
+  battery_msg.power_supply_technology = 3; // LiPo
+  battery_msg.present = 1;                 // battery present
+
+  battery_msg.location = "Manta";        // unit location
+  battery_msg.serial_number = "Sewial4bwekfast";  // unit serial number
+  battery_msg.cell_voltage = new float[CELLS];
+
+  /*
+  for (int outputs=0; outputs<sizeof(lightPins)+1; outputs++){
   pinMode(lightPins[outputs], OUTPUT);
- }
+  }
 
- // Initiating the OLED screen
- display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x32)
- display.display();
- delay(2000);
+  // Initiating the OLED screen
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x32)
+  display.display();
+  delay(1000);
 
- // Clear the buffer.
- display.clearDisplay();
- display.setTextSize(1);
- display.setCursor(0, 0);
- display.setTextColor(WHITE);
- 
+  // Clear the buffer.
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  display.setTextColor(WHITE);
+  */
 }
 
 
 void loop() {
 
-  // Reading inputs
-  int cell1 = analogRead(cellPins[0]);
-  int cell2 = analogRead(cellPins[1]);
-  int cell3 = analogRead(cellPins[2]);
-  int cell4 = analogRead(cellPins[3]);
-
-  // Calculating original cell voltage by multiplying with the reverse of the physical voltage divider ratio.
-  // 4.75 V is used over 5.0 V because it is more accurate to the physical hardware.
-  float volt1 = (cell1 * 4.75 / 1023.0);
-  float volt2 = (cell2 * 4.75 / 1023.0) * ((r1[1] + r2[1]) / r2[1]) - volt1;
-  float volt3 = (cell3 * 4.75 / 1023.0) * ((r1[2] + r2[2]) / r2[2]) - volt1 - volt2;
-  float volt4 = (cell4 * 4.75 / 1023.0) * ((r1[3] + r2[3]) / r2[3]) - volt1 - volt2 - volt3;
-  float batteryVoltage = volt1 + volt2 + volt3 + volt4;
-
-  // Lighting up array based on battery capacity.
-  //    Intervals of 0.35 V from 13.0 V and up.
-  //    The measurement uncertainty is exploited in a way that a fully charged battery
-  //    will show a higher voltage, and an undercharged one will show less to lessen
-  //    the chance to kill the battery.
+  double batteryVoltage = 0.0;
   
+  // Reading inputs
+  double cell1 = analogRead(A3) * BIT_TO_VOLT;
+  double cell2 = analogRead(A2) * BIT_TO_VOLT;
+  double cell3 = analogRead(A1) * BIT_TO_VOLT;
+  double cell4 = analogRead(A0) * BIT_TO_VOLT;
+
+  // Calculating original cell voltage
+  //cell1;
+  cell2 = cell2 * ratios[1] - cell1;
+  cell3 = cell3 * ratios[2] - cell1 - cell2;
+  cell4 = cell4 * ratios[3] - cell1 - cell2 - cell3;
+  batteryVoltage = cell4 + cell3 + cell2 + cell1;
+
+  // Updating ROS Topics
+  battery_msg.voltage = (float)batteryVoltage;
+  battery_msg.cell_voltage[0] = (float)cell1;
+  battery_msg.cell_voltage[1] = (float)cell2;
+  battery_msg.cell_voltage[2] = (float)cell3;
+  battery_msg.cell_voltage[3] = (float)cell4;
+
+  /*
+  // LIGHT ARRAY
   if (batteryVoltage <= 17.5 && batteryVoltage > 16.15){
     lightUp(10);
   } else if (batteryVoltage <= 16.15 && batteryVoltage > 15.8){
@@ -105,35 +120,35 @@ void loop() {
     lightUp(0);
   } else {
     // If the voltage is something it shouldn't be; blink all lights!
-    lightBlink();
+    lightUp(0);
   }
 
-  // Displaying the measured voltages on the onboard screen
+  // OLED
   display.setCursor(0, 0);
-  display.print("Voltage: ");
+  display.setTextSize(2);
+  display.print("V: ");
   display.println(batteryVoltage);
+  display.setTextSize(1);
   display.print("(");
-  display.print(volt1);
+  display.print(cell1);
   display.print(", ");
-  display.print(volt2);
+  display.print(cell2);
   display.println(", ");
-  display.print(volt3);
+  display.print(cell3);
   display.print(", ");
-  display.print(volt4);
+  display.print(cell4);
   display.println(")");
   display.display();
-  delay(10);
   display.clearDisplay();
-
-  // Writing to the topic [Add more info]
-  battery.voltage = batteryVoltage;
+  */
   
   // Publish ROS Topic
-  battery.publish(&battery_msg);
+  batteryState.publish( &battery_msg );
   nh.spinOnce();
+  delay(1000);
 }
 
-
+/*
 void lightUp(int num){
   // Lights up the amount of LEDs on a light array given by "num".
   
@@ -144,7 +159,6 @@ void lightUp(int num){
     digitalWrite(lightPins[j], LOW);
   }
 }
-
 
 void lightBlink(){
   // Blinks all the LEDs
@@ -160,4 +174,4 @@ void lightBlink(){
   }
   
   delay(250);
-}
+}*/
