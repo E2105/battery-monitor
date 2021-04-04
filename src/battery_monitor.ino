@@ -39,6 +39,7 @@ void setup() {
   // ROS initiation
   nh.initNode();
   nh.advertise(batteryState);
+  nh.negotiateTopics();
 
   // Populate battery parameters.
   battery_msg.power_supply_status = 2;     // discharging
